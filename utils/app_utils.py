@@ -110,7 +110,8 @@ def standard_colors():
 def color_name_to_rgb():
     colors_rgb = []
     for key, value in colors.cnames.items():
-        colors_rgb.append((key, struct.unpack('BBB', bytes.fromhex(value.replace('#', '')))))
+        colors_rgb.append(
+            (key, struct.unpack('BBB', bytes.fromhex(value.replace('#', '')))))
     return dict(colors_rgb)
 
 
