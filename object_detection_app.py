@@ -32,6 +32,7 @@ category_index = label_map_util.create_category_index(categories)
 
 
 def detect_objects(image_np, sess, detection_graph):
+    print('start to detect object on process # {}'.format(os.getpid()))
     # Expand dimensions since the model expects images to have shape: [1, None, None, 3]
     image_np_expanded = np.expand_dims(image_np, axis=0)
     image_tensor = detection_graph.get_tensor_by_name('image_tensor:0')
@@ -113,6 +114,7 @@ if __name__ == '__main__':
     fps = FPS().start()
 
     while True:  # fps._numFrames < 120
+        print("start to read video frames on process # {}".format(os.getpid()))
         frame = video_capture.read()
         input_q.put(frame)
 
