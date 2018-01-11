@@ -388,7 +388,8 @@ def visualize_boxes_and_labels_on_image_array(image,
                         class_name,
                         int(100 * scores[i]))
                     if class_name == 'person':
-                        print("----detect person, score is {} ----".format(scores[i]))
+                        # print("----detect person, score is {} ----".format(scores[i]))
+                        return scores[i]
 
                 else:
                     display_str = 'score: {}%'.format(int(100 * scores[i]))
@@ -398,6 +399,7 @@ def visualize_boxes_and_labels_on_image_array(image,
                 else:
                     box_to_color_map[box] = STANDARD_COLORS[
                         classes[i] % len(STANDARD_COLORS)]
+    return None
 
     # Draw all boxes onto image.
     for box, color in six.iteritems(box_to_color_map):

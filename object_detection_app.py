@@ -1,11 +1,13 @@
 import os
 import cv2
 import time
+from datetime import datetime
 import argparse
 import multiprocessing
 import numpy as np
 import tensorflow as tf
 
+from VideoSource import VideoSource
 from utils.app_utils import FPS, WebcamVideoStream
 from multiprocessing import Queue, Pool
 from object_detection.utils import label_map_util
@@ -50,9 +52,13 @@ def detect_objects(image_np, sess, detection_graph):
     (boxes, scores, classes, num_detections) = sess.run(
         [boxes, scores, classes, num_detections],
         feed_dict={image_tensor: image_np_expanded})
+    # print("The detection result is: \n", "box: ", boxes, '\nscores: ', scores,
+    #       '\nclasses: ', classes, '\nnum_detections: ', num_detections)
+    # return 'placeholder'
 
+    # return None
     # Visualization of the results of a detection.
-    vis_util.visualize_boxes_and_labels_on_image_array(
+    return vis_util.visualize_boxes_and_labels_on_image_array(
         image_np,
         np.squeeze(boxes),
         np.squeeze(classes).astype(np.int32),
@@ -60,7 +66,7 @@ def detect_objects(image_np, sess, detection_graph):
         category_index,
         use_normalized_coordinates=True,
         line_thickness=8)
-    return image_np
+    # return image_np
 
 
 def worker(input_q, output_q):
@@ -78,9 +84,11 @@ def worker(input_q, output_q):
     fps = FPS().start()
     while True:
         fps.update()
-        frame = input_q.get()
-        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        output_q.put(detect_objects(frame_rgb, sess, detection_graph))
+        item = input_q.get()
+        frame_rgb = cv2.cvtColor(item[1], cv2.COLOR_BGR2RGB)
+        detection_result = detect_objects(frame_rgb, sess, detection_graph)
+        item[1] = detection_result
+        output_q.put(item)
 
     fps.stop()
     sess.close()
@@ -107,32 +115,54 @@ if __name__ == '__main__':
     output_q = Queue(maxsize=args.queue_size)
     pool = Pool(args.num_workers, worker, (input_q, output_q))
 
-    video_url = "rtsp://admin:Orange2017@192.168.50.248:554/h264/ch1/main/av_stream"
-    video_capture = WebcamVideoStream(src=video_url,
-                                      width=args.width,
-                                      height=args.height).start()
-    fps = FPS().start()
+    #  Manage video sources
+    video_sources = list()
+    video_1 = VideoSource(1, "rtsp://admin:Orange2017@192.168.50.248:554/h264/ch1/main/av_stream")
+    video_sources.append(video_1)
+    video_2 = VideoSource(2, "rtsp://admin:Orange2017@192.168.50.248:554/h264/ch1/main/av_stream")
+    video_sources.append(video_2)
 
-    while True:  # fps._numFrames < 120
-        print("start to read video frames on process # {}".format(os.getpid()))
-        frame = video_capture.read()
-        input_q.put(frame)
+    video_streams = list()
 
-        t = time.time()
+    for i in range(len(video_sources)):
+        video_streams.append(WebcamVideoStream(source=video_sources[i],
+                                               width=args.width,
+                                               height=args.height).start())
+    while True:
+        for s in video_streams:
+            # fps = FPS().start()
+            frame = s.read()
+            #  the item in queue contains CameraId, current frame and time.
+            input_item = [s.id, frame, time.time()]
+            input_q.put(input_item)
+            output_item = output_q.get()
+            if output_item[1] is not None:
+                print('----detect a person from camera %s at %s, score is %s ------' %
+                      (output_item[0], datetime.fromtimestamp(output_item[2]), output_item[1]))
+            # output_rgb = cv2.cvtColor(output_q.get(), cv2.COLOR_RGB2BGR)
 
-        output_rgb = cv2.cvtColor(output_q.get(), cv2.COLOR_RGB2BGR)
-        cv2.imshow('Video', output_rgb)
-        fps.update()
+    # cv2.imshow('Video1', output_rgb)
 
-        print('[INFO] elapsed time: {:.2f}'.format(time.time() - t))
+    # while True:  # fps._numFrames < 120
+    #     print("start to read video frames on process # {}".format(os.getpid()))
+    #     frame = video_capture.read()
+    #     input_q.put(frame)
+    #
+    #     t = time.time()
+    #
+    #     output_rgb = cv2.cvtColor(output_q.get(), cv2.COLOR_RGB2BGR)
+    #     cv2.imshow('Video', output_rgb)
+    #     fps.update()
+    #
+    #     print('[INFO] elapsed time: {:.2f}'.format(time.time() - t))
+    #
+    #     if cv2.waitKey(1) & 0xFF == ord('q'):
+    #         break
 
-        if cv2.waitKey(1) & 0xFF == ord('q'):
-            break
-
-    fps.stop()
-    print('[INFO] elapsed time (total): {:.2f}'.format(fps.elapsed()))
-    print('[INFO] approx. FPS: {:.2f}'.format(fps.fps()))
+    # fps.stop()
+    # print('[INFO] elapsed time (total): {:.2f}'.format(fps.elapsed()))
+    # print('[INFO] approx. FPS: {:.2f}'.format(fps.fps()))
 
     pool.terminate()
-    video_capture.stop()
-    cv2.destroyAllWindows()
+    # video_capture.stop()
+    # cv2.destroyAllWindows()
